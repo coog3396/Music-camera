@@ -80,7 +80,7 @@ h2{font-size:18px;margin:28px 0 10px}
       <label class="btn">Or use a photo<input class="photo" type="file" accept="image/*"></label>
     </div>
   </div>
-  <div class="read"><span>Key <b id="rKey">C</b></span><span>Mood <b id="rMood">Dreamy</b></span><span>Chord <b id="rChord">I</b></span><span><b id="rBpm">84</b> bpm</span><span>Voices <b id="rVox">0</b></span></div>
+  <div class="read"><span>Key <b id="rKey">C</b></span><span>Mood <b id="rMood">Dreamy</b></span><span>Chord <b id="rChord">I</b></span><span><b id="rBpm">84</b> bpm</span><span>Palette <b id="rPal">Abstract synths</b></span></div>
 
   <div class="bar">
     <button class="l" id="flip" aria-label="Switch camera">Flip</button>
@@ -97,6 +97,9 @@ h2{font-size:18px;margin:28px 0 10px}
   </div>
 
   <div class="dials">
+    <label>Palette
+      <select id="pal"><option value="auto">Auto (reads the vibe)</option><option value="lofi">Lo-fi night</option><option value="forest">Forest folk</option><option value="neon">Neon city</option><option value="under">Underwater</option><option value="cine">Cinematic</option><option value="play">Sunny play</option><option value="lounge">Jazz lounge</option><option value="bazaar">Dream bazaar</option><option value="abstract">Abstract synths</option></select>
+    </label>
     <label>Mood
       <select id="mood"><option value="auto">Auto (from the scene)</option><option value="dreamy">Dreamy</option><option value="sunny">Sunny</option><option value="night">Night</option></select>
     </label>
@@ -107,24 +110,29 @@ h2{font-size:18px;margin:28px 0 10px}
     <label>Zoom <span id="zLbl">1.0x</span><input id="zoom" type="range" min="1" max="5" step="0.05" value="1"></label>
     <label>Voices <input id="vox" type="range" min="2" max="8" value="6"></label>
     <label>Dream (reverb) <input id="dream" type="range" min="0" max="100" value="55"></label>
+    <label>Atmosphere <input id="atmo" type="range" min="0" max="100" value="60"></label>
   </div>
 
   <h2>Sound album</h2>
   <ul class="recs" id="recs"><li class="empty">Tap Record while it plays. Each take is saved here with the frame it came from.</li></ul>
 
-  <h2>Which instrument each color gets</h2>
+  <h2>Palette: <span id="palName">Abstract synths</span></h2>
+  <p class="empty" style="margin:-4px 0 12px">On Auto, the camera reads the scene (light, color, warmth, texture, movement) and picks the band. It changes palettes only at the end of a musical phrase.</p>
   <ul class="key" id="key"></ul>
   <dl class="map">
-    <dt>Pixels</dt><dd>Each object's own pixels shape its tone and write its little melody, so no two objects sound quite alike.</dd>
+    <dt>Pixels</dt><dd>Each object's own pixels write its little melody, and in Abstract synths they shape its tone too.</dd>
+    <dt>Granular</dt><dd>The biggest thing plays as a granular cloud: its instrument chopped into tiny slices and smeared into a shimmer. Very textured objects get the same treatment.</dd>
+    <dt>Energy</dt><dd>Movement and busy detail raise the energy: more drums, more notes, faster tempo within the palette's range. Calm scenes thin out and slow down.</dd>
     <dt>Size</dt><dd>The biggest thing becomes a slow drone (always a sustained instrument). Large objects play long low notes; small ones sparkle up high and swap to a struck or plucked version of their instrument.</dd>
     <dt>Height</dt><dd>Higher in the frame plays higher notes.</dd>
     <dt>Texture</dt><dd>Smooth surfaces sound pure. Busy textures add grit, brighter tone and more rhythmic hits.</dd>
     <dt>Shape</dt><dd>Round shapes swell in softly. Jagged, thin shapes hit fast.</dd>
     <dt>Position</dt><dd>Left and right in the frame pans the sound left and right.</dd>
     <dt>Movement</dt><dd>Moving objects wobble with vibrato.</dd>
-    <dt>Tempo</dt><dd>On Auto, calm and smooth scenes slow down and busy or moving scenes speed up, drifting gradually so it breathes instead of jumping.</dd>
+    
     <dt>The whole scene</dt><dd>Its overall color sets the key and its brightness sets the mood. A slow chord progression keeps every voice in harmony.</dd>
   </dl>
+  <p class="empty" style="margin-top:22px">Instrument samples: FluidR3 GM soundfont by Frank Wen, CC BY 3.0, hosted by gleitz/midi-js-soundfonts.</p>
 </div>
 
 <script>
@@ -142,9 +150,6 @@ const ENG={bowed:{n:'Strings',sus:1,g:.9},pad:{n:'Synth pad',sus:1,g:.7},choirU:
   glass:{n:'Glass',g:.8,oct:12},bell:{n:'Bell',g:.9,oct:12},steel:{n:'Steel drum',g:1}};
 const HUE_ENG=['bowed','ep','pluck','kalimba','marimba','koto','glass','choirU','pad','bell','choirA','steel'];
 const HUE_NAME=['Red','Orange','Yellow','Lime','Green','Jade','Cyan','Sky','Blue','Violet','Purple','Pink'];
-$('key').innerHTML=HUE_ENG.map((e,i)=>`<li><span class="sw" style="background:hsl(${i*30} 75% 55%)"></span><span><b>${HUE_NAME[i]}</b><br>${ENG[e].n}</span></li>`).join('')+
-  [['White','flute','hsl(0 0% 92%)'],['Grey','pixel','hsl(0 0% 55%)'],['Black','sub','hsl(0 0% 14%)']].map(([n,e,c])=>`<li><span class="sw" style="background:${c};box-shadow:0 0 0 1px #fff4"></span><span><b>${n}</b><br>${ENG[e].n}</span></li>`).join('');
-
 const video=$('video'),vf=$('vf'),vx=vf.getContext('2d');
 let stream=null,facing='environment',live=true,still=null;
 let blobs=[],nextId=1,centers=null,root=0,pendingRoot=0,avgL=.5,mood='dreamy',tick=0,autoBpm=84,prevLum=null;
@@ -161,72 +166,119 @@ function hsl(r,g,b){const mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2;let 
 function hsl2rgb(h,s,l){const k=n=>(n+h/30)%12,a=s*Math.min(l,1-l),f=n=>l-a*Math.max(-1,Math.min(k(n)-3,9-k(n),1));return[f(0)*255,f(8)*255,f(4)*255].map(Math.round)}
 const euclid=(k,n)=>[...Array(n)].map((_,i)=>Math.floor((i+1)*k/n)-Math.floor(i*k/n));
 
-/* ---------- outlines (marching squares on each object's mask) ---------- */
-function contour(mask,SW,SH){const segs=[],v=(x,y)=>x<0||y<0||x>=SW||y>=SH?0:mask[y*SW+x];
-  for(let y=-1;y<SH;y++)for(let x=-1;x<SW;x++){const k=v(x,y)*8+v(x+1,y)*4+v(x+1,y+1)*2+v(x,y+1);if(k===0||k===15)continue;
-    const T=[x+.5,y],Rt=[x+1,y+.5],B=[x+.5,y+1],L=[x,y+.5];
-    const tb={1:[[L,B]],2:[[B,Rt]],3:[[L,Rt]],4:[[T,Rt]],5:[[T,Rt],[L,B]],6:[[T,B]],7:[[L,T]],8:[[L,T]],9:[[T,B]],10:[[L,T],[B,Rt]],11:[[T,Rt]],12:[[L,Rt]],13:[[B,Rt]],14:[[L,B]]}[k];
+/* ---------- outlines: smooth contours (interpolated marching squares on a soft mask) ---------- */
+function contour(F,SW,SH){const segs=[],v=(x,y)=>x<0||y<0||x>=SW||y>=SH?0:F[y*SW+x],T=.5;
+  const ip=(p,q)=>{const d=q-p;return Math.abs(d)<1e-6?.5:Math.max(0,Math.min(1,(T-p)/d))};
+  for(let y=-1;y<SH;y++)for(let x=-1;x<SW;x++){const a=v(x,y),b=v(x+1,y),c=v(x+1,y+1),d=v(x,y+1);
+    const k=(a>T)*8+(b>T)*4+(c>T)*2+(d>T);if(k===0||k===15)continue;
+    const Tp=[x+ip(a,b),y],Rp=[x+1,y+ip(b,c)],Bp=[x+ip(d,c),y+1],Lp=[x,y+ip(a,d)];
+    const tb={1:[[Lp,Bp]],2:[[Bp,Rp]],3:[[Lp,Rp]],4:[[Tp,Rp]],5:[[Tp,Rp],[Lp,Bp]],6:[[Tp,Bp]],7:[[Lp,Tp]],8:[[Lp,Tp]],9:[[Tp,Bp]],10:[[Lp,Tp],[Bp,Rp]],11:[[Tp,Rp]],12:[[Lp,Rp]],13:[[Bp,Rp]],14:[[Lp,Bp]]}[k];
     for(const[p,q]of tb)segs.push((p[0]+.5)/SW,(p[1]+.5)/SH,(q[0]+.5)/SW,(q[1]+.5)/SH)}
   return segs}
+function boxBlur(src,SW,SH,ch){const out=new Float32Array(src.length);
+  for(let y=0;y<SH;y++)for(let x=0;x<SW;x++)for(let c=0;c<ch;c++){let s=0,n=0;
+    for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++){const xx=x+i,yy=y+j;if(xx<0||yy<0||xx>=SW||yy>=SH)continue;s+=src[(yy*SW+xx)*ch+c];n++}
+    out[(y*SW+x)*ch+c]=s/n}
+  return out}
+function lab(r,g,b){const f=c=>c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4);r=f(r);g=f(g);b=f(b);
+  let X=(r*.4124+g*.3576+b*.1805)/.95047,Y=r*.2126+g*.7152+b*.0722,Z=(r*.0193+g*.1192+b*.9505)/1.08883;
+  const h=t=>t>.008856?Math.cbrt(t):7.787*t+16/116;X=h(X);Y=h(Y);Z=h(Z);return[116*Y-16,500*(X-Y),200*(Y-Z)]}
 
 /* ---------- seeing ---------- */
+let emaHi=null,lightLevel=.5,lowLight=false;
 function analyze(){
   const s=source();if(!s)return;
-  const SW=44,SH=Math.max(20,Math.round(SW*(vf.clientHeight/vf.clientWidth||4/3))),N=SW*SH,HW=SW*2,HH=SH*2;
-  if(sc.width!==SW||sc.height!==SH){sc.width=SW;sc.height=SH;hc.width=HW;hc.height=HH;centers=null;prevLum=null}
-  drawCover(sx,s,SW,SH,mirrored());drawCover(hx,s,HW,HH,mirrored());
-  const d=sx.getImageData(0,0,SW,SH).data,hd=hx.getImageData(0,0,HW,HH).data;
-  const px=new Float32Array(N*3),lum=new Float32Array(N),tex=new Float32Array(N);
-  let ax=0,ay=0,al=0,mot=0,tsum=0;
-  for(let i=0;i<N;i++){const r=d[i*4]/255,g=d[i*4+1]/255,b=d[i*4+2]/255;px[i*3]=r;px[i*3+1]=g;px[i*3+2]=b;lum[i]=.3*r+.59*g+.11*b;
-    if(prevLum)mot+=Math.abs(lum[i]-prevLum[i]);const c=hsl(r,g,b),a=c.h*Math.PI/180;ax+=Math.cos(a)*c.s;ay+=Math.sin(a)*c.s;al+=c.l}
-  prevLum=lum;
-  const hl=(x,y)=>{const i=(y*HW+x)*4;return(.3*hd[i]+.59*hd[i+1]+.11*hd[i+2])/255};
-  for(let y=1;y<HH;y++)for(let x=1;x<HW;x++){const l=hl(x,y),gr=Math.abs(l-hl(x-1,y))+Math.abs(l-hl(x,y-1));tex[(y>>1)*SW+(x>>1)]+=gr;tsum+=gr}
-  pendingRoot=Math.round(((Math.atan2(ay,ax)*180/Math.PI+360)%360)/30)%12;avgL=al/N;
-  // tempo from the scene: busy textures and movement speed it up
-  const texE=Math.min(1,tsum/(HW*HH)/.12),motE=live?Math.min(1,mot/N/.06):0;
-  const target=Math.max(58,Math.min(140,62+texE*48+motE*45));autoBpm+=(target-autoBpm)*(live?.06:1);
-  // k-means on color, seeded from the last frame so groups stay stable
-  const K=7;if(!centers){centers=[];for(let j=0;j<K;j++){const i=Math.floor((j+.5)*N/K);centers.push([px[i*3],px[i*3+1],px[i*3+2]])}}
-  const lab=new Int8Array(N);
-  for(let it=0;it<5;it++){const sum=centers.map(()=>[0,0,0,0]);
-    for(let i=0;i<N;i++){let best=0,bd=9;for(let j=0;j<K;j++){const c=centers[j],e=(px[i*3]-c[0])**2+(px[i*3+1]-c[1])**2+(px[i*3+2]-c[2])**2;if(e<bd){bd=e;best=j}}
-      lab[i]=best;const S=sum[best];S[0]+=px[i*3];S[1]+=px[i*3+1];S[2]+=px[i*3+2];S[3]++}
-    centers=sum.map(S=>S[3]?[S[0]/S[3],S[1]/S[3],S[2]/S[3]]:(()=>{const i=Math.floor(Math.random()*N);return[px[i*3],px[i*3+1],px[i*3+2]]})())}
+  const SW=72,SH=Math.max(36,Math.round(SW*(vf.clientHeight/vf.clientWidth||4/3))),N=SW*SH,HW=SW*2,HH=SH*2,HN=HW*HH;
+  if(hc.width!==HW||hc.height!==HH){hc.width=HW;hc.height=HH;centers=null;prevLum=null;emaHi=null}
+  drawCover(hx,s,HW,HH,mirrored());const hd=hx.getImageData(0,0,HW,HH).data;
+  const raw=new Float32Array(HN*3);let rl=0;
+  for(let i=0;i<HN;i++){raw[i*3]=hd[i*4]/255;raw[i*3+1]=hd[i*4+1]/255;raw[i*3+2]=hd[i*4+2]/255;rl+=.3*raw[i*3]+.59*raw[i*3+1]+.11*raw[i*3+2]}
+  lightLevel=rl/HN;const wasLow=lowLight;lowLight=lightLevel<.24;
+  // motion is measured on the raw frame
+  const rawSmall=new Float32Array(N);let mot=0;
+  for(let y=0;y<SH;y++)for(let x=0;x<SW;x++){let l=0;for(const[i,j]of[[0,0],[1,0],[0,1],[1,1]]){const q=((y*2+j)*HW+x*2+i)*3;l+=.3*raw[q]+.59*raw[q+1]+.11*raw[q+2]}rawSmall[y*SW+x]=l/4}
+  if(prevLum&&prevLum.length===N)for(let i=0;i<N;i++)mot+=Math.abs(rawSmall[i]-prevLum[i]);prevLum=rawSmall;
+  // temporal denoise: average frames together (more in low light)
+  if(!emaHi||emaHi.length!==raw.length||!live)emaHi=raw;else{const a=lowLight?.3:.55;for(let j=0;j<raw.length;j++)emaHi[j]+=(raw[j]-emaHi[j])*a}
+  // auto levels + white balance so dim or tinted rooms still read clearly
+  let mr=0,mg=0,mb=0;const hist=new Uint32Array(256);
+  for(let i=0;i<HN;i++){const r=emaHi[i*3],g=emaHi[i*3+1],b=emaHi[i*3+2];mr+=r;mg+=g;mb+=b;hist[Math.min(255,((.3*r+.59*g+.11*b)*255)|0)]++}
+  mr/=HN;mg/=HN;mb/=HN;const gm=(mr+mg+mb)/3,wb=x=>Math.max(.7,Math.min(1.5,1+(gm/Math.max(.02,x)-1)*.6)),gr=wb(mr),gg=wb(mg),gb=wb(mb);
+  const pct=p=>{let c=0;for(let i=0;i<256;i++){c+=hist[i];if(c>=p*HN)return i/255}return 1};
+  const lo=pct(.02),span=Math.max(.22,pct(.98)-lo),hi=new Float32Array(HN*3);
+  for(let i=0;i<HN;i++){hi[i*3]=Math.min(1,Math.max(0,(emaHi[i*3]*gr-lo)/span));hi[i*3+1]=Math.min(1,Math.max(0,(emaHi[i*3+1]*gg-lo)/span));hi[i*3+2]=Math.min(1,Math.max(0,(emaHi[i*3+2]*gb-lo)/span))}
+  // texture from fine detail, minus the grain floor
+  const tex=new Float32Array(N),nf=lowLight?.05:.018;let tsum=0;const HL=i=>.3*hi[i*3]+.59*hi[i*3+1]+.11*hi[i*3+2];
+  for(let y=1;y<HH;y++)for(let x=1;x<HW;x++){const i=y*HW+x,l=HL(i),g=Math.max(0,Math.abs(l-HL(i-1))+Math.abs(l-HL(i-HW))-nf);tex[(y>>1)*SW+(x>>1)]+=g;tsum+=g}
+  // downsample 2x2 and soften
+  let px=new Float32Array(N*3);
+  for(let y=0;y<SH;y++)for(let x=0;x<SW;x++)for(let c=0;c<3;c++){let v=0;for(const[i,j]of[[0,0],[1,0],[0,1],[1,1]])v+=hi[((y*2+j)*HW+x*2+i)*3+c];px[(y*SW+x)*3+c]=v/4}
+  px=boxBlur(px,SW,SH,3);
+  const lum=new Float32Array(N),feat=new Float32Array(N*3);let ax=0,ay=0,vs=0,vg=0,vbl=0,vw=0,vn=0;const hb=new Float32Array(12);
+  for(let i=0;i<N;i++){const r=px[i*3],g=px[i*3+1],b=px[i*3+2];lum[i]=.3*r+.59*g+.11*b;const L=lab(r,g,b);feat[i*3]=L[0]*.32;feat[i*3+1]=L[1];feat[i*3+2]=L[2];
+    const c=hsl(r,g,b),a=c.h*Math.PI/180;ax+=Math.cos(a)*c.s;ay+=Math.sin(a)*c.s;vs+=c.s;
+    if(c.s>.2){if(c.h>=75&&c.h<165)vg++;else if(c.h>=165&&c.h<260)vbl++;else if(c.h<50||c.h>=330)vw++;hb[Math.round(c.h/30)%12]+=c.s}if(c.s>.65&&c.l>.5)vn++}
+  pendingRoot=Math.round(((Math.atan2(ay,ax)*180/Math.PI+360)%360)/30)%12;avgL=Math.min(1,lightLevel*1.15);
+  const texE=Math.min(1,tsum/(HW*HH)/.1),motE=live?Math.min(1,mot/N/.06):0;
+  const eNow=Math.min(1,texE*.45+motE*.75);energy+=(eNow-energy)*(live?.12:1);
+  const hbt=hb.reduce((x,y)=>x+y,0)||1;
+  vibe={light:lightLevel,sat:vs/N,green:vg/N,blue:vbl/N,warm:vw/N,neon:lowLight?vn/N:0,div:[...hb].filter(x=>x/hbt>.08).length,contrast:pct(.98)-lo,texE};
+  const pk=vibePick();votes[pk]=(votes[pk]||0)+1;if(!timer||!live){for(const k in votes)if(k!==pk)votes[k]=0;maybeSwitch()}
+  const[blo,bhi]=PAL[pal].bpm,target=blo+(bhi-blo)*Math.min(1,energy*1.4);autoBpm+=(target-autoBpm)*(live?.06:1);
+  if(live&&wasLow!==lowLight)status(lowLight?'Live · low light boost':'Live');
+  // group by color (lightness counts less, so shading does not split an object)
+  const K=8;if(!centers||centers.length!==K){centers=[];for(let j=0;j<K;j++){const i=Math.floor((j+.5)*N/K);centers.push([feat[i*3],feat[i*3+1],feat[i*3+2]])}}
+  let lab8=new Uint8Array(N);
+  for(let it=0;it<(live?3:6);it++){const sum=centers.map(()=>[0,0,0,0]);
+    for(let i=0;i<N;i++){let best=0,bd=1e9;const f0=feat[i*3],f1=feat[i*3+1],f2=feat[i*3+2];
+      for(let j=0;j<K;j++){const c=centers[j],e=(f0-c[0])**2+(f1-c[1])**2+(f2-c[2])**2;if(e<bd){bd=e;best=j}}
+      lab8[i]=best;const S=sum[best];S[0]+=f0;S[1]+=f1;S[2]+=f2;S[3]++}
+    centers=sum.map(S=>S[3]?[S[0]/S[3],S[1]/S[3],S[2]/S[3]]:(()=>{const i=Math.floor(Math.random()*N);return[feat[i*3],feat[i*3+1],feat[i*3+2]]})())}
+  // smooth the label map: each cell takes its neighborhood's majority
+  for(let pass=0;pass<3;pass++){const nl=new Uint8Array(N),cnt=new Uint8Array(K);
+    for(let y=0;y<SH;y++)for(let x=0;x<SW;x++){cnt.fill(0);for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++){const xx=x+i,yy=y+j;if(xx>=0&&yy>=0&&xx<SW&&yy<SH)cnt[lab8[yy*SW+xx]]++}
+      const me=lab8[y*SW+x];let best=me;for(let k=0;k<K;k++)if(cnt[k]>cnt[best])best=k;nl[y*SW+x]=cnt[best]>=5?best:me}
+    lab8=nl}
   const comp=new Int32Array(N).fill(-1),found=[];
   for(let i=0;i<N;i++){if(comp[i]>=0)continue;const id=found.length,st=[i];comp[i]=id;
     const B={cid:id,n:0,sx:0,sy:0,r:0,g:0,b:0,per:0,tex:0,lums:[]};
     while(st.length){const p=st.pop(),x=p%SW,y=(p/SW)|0;B.n++;B.sx+=x;B.sy+=y;B.r+=px[p*3];B.g+=px[p*3+1];B.b+=px[p*3+2];B.tex+=tex[p];B.lums.push(lum[p]);
       let edge=false;for(const[nx,ny]of[[x+1,y],[x-1,y],[x,y+1],[x,y-1]]){
         if(nx<0||ny<0||nx>=SW||ny>=SH){edge=true;continue}const q=ny*SW+nx;
-        if(lab[q]!==lab[p]){edge=true;continue}if(comp[q]<0){comp[q]=id;st.push(q)}}
+        if(lab8[q]!==lab8[p]){edge=true;continue}if(comp[q]<0){comp[q]=id;st.push(q)}}
       if(edge)B.per++}
     found.push(B)}
-  const vox=+$('vox').value,minN=N*.02;
+  const vox=+$('vox').value,minN=N*.015;
   const list=found.filter(B=>B.n>=minN).map(B=>{const r=B.r/B.n,g=B.g/B.n,b=B.b/B.n,c=hsl(r,g,b);
     return{cid:B.cid,cx:(B.sx/B.n+.5)/SW,cy:(B.sy/B.n+.5)/SH,area:B.n/N,r,g,b,h:c.h,s:c.s,l:c.l,
       tex:Math.min(1,B.tex/B.n/1.2),round:Math.min(1,B.n*4*Math.PI/(B.per*B.per||1)),lums:B.lums,
-      sal:Math.pow(B.n/N,.6)*(.5+c.s+Math.abs(c.l-avgL))}})
+      sal:Math.pow(B.n/N,.6)*(.5+c.s+Math.abs(c.l-.5))}})
     .sort((a,b)=>b.sal-a.sal).slice(0,vox);
-  for(const nb of list){const m=new Uint8Array(N);for(let i=0;i<N;i++)if(comp[i]===nb.cid)m[i]=1;nb.mask=m;nb.segs=contour(m,SW,SH);nb.SW=SW;nb.SH=SH}
+  for(const nb of list){const m=new Float32Array(N);for(let i=0;i<N;i++)if(comp[i]===nb.cid)m[i]=1;
+    // fill holes so an object is one clean shape
+    const seen=new Uint8Array(N),st=[];for(let x=0;x<SW;x++){st.push(x,(SH-1)*SW+x)}for(let y=0;y<SH;y++){st.push(y*SW,y*SW+SW-1)}
+    while(st.length){const p=st.pop();if(seen[p]||m[p])continue;seen[p]=1;const x=p%SW,y=(p/SW)|0;if(x>0)st.push(p-1);if(x<SW-1)st.push(p+1);if(y>0)st.push(p-SW);if(y<SH-1)st.push(p+SW)}
+    for(let i=0;i<N;i++)if(!m[i]&&!seen[i])m[i]=1;
+    nb.field=boxBlur(boxBlur(m,SW,SH,1),SW,SH,1);nb.SW=SW;nb.SH=SH}
   track(list);updateRead();
 }
 
 /* ---------- identity ---------- */
+function blendField(o,n){if(!o||o.length!==n.length||!live)return n;const f=new Float32Array(n.length);for(let i=0;i<n.length;i++)f[i]=o[i]*.45+n[i]*.55;return f}
 function track(list){
   const used=new Set(),out=[];
   for(const nb of list){let best=null,bc=.38;
     for(const ob of blobs){if(used.has(ob.id))continue;
       const cost=Math.hypot(nb.cx-ob.cx,nb.cy-ob.cy)+.8*Math.hypot(nb.r-ob.r,nb.g-ob.g,nb.b-ob.b);if(cost<bc){bc=cost;best=ob}}
     if(best){used.add(best.id);const mv=Math.hypot(nb.cx-best.cx,nb.cy-best.cy);
-      Object.assign(best,{cx:nb.cx,cy:nb.cy,area:nb.area,r:nb.r,g:nb.g,b:nb.b,h:nb.h,s:nb.s,l:nb.l,mask:nb.mask,segs:nb.segs,SW:nb.SW,SH:nb.SH,fill:null,
+      Object.assign(best,{cx:nb.cx,cy:nb.cy,area:nb.area,r:nb.r,g:nb.g,b:nb.b,h:nb.h,s:nb.s,l:nb.l,SW:nb.SW,SH:nb.SH,field:blendField(best.field,nb.field),
         tex:best.tex*.8+nb.tex*.2,round:best.round*.8+nb.round*.2,motion:live?Math.min(1,best.motion*.6+mv*6*.4):0});out.push(best)}
     else out.push(born(nb))}
+  for(const b of out)b.segs=contour(b.field,b.SW,b.SH);
   out.sort((a,b)=>b.area-a.area);
   out.forEach((b,i)=>{const want=i===0&&b.area>.14?'drone':(b.role==='drone'||b.area>.07)?'big':b.area>.03?'medium':'small';
     if(want!==b.role&&(want==='drone'||b.role==='drone'))setRole(b,want)});
-  blobs=out}
+  blobs=out;spreadInst()}
 function born(nb){
   const b={...nb,id:nextId++,dx:nb.cx,dy:nb.cy,motion:0,pulse:0,step:0,note:'',wave:null,fill:null};
   const L=nb.lums,M=64,v=[...Array(M)].map((_,i)=>L[Math.floor(i*L.length/M)]),mean=v.reduce((a,c)=>a+c,0)/M;
@@ -243,7 +295,7 @@ function pickEngine(b){
   if(b.role==='drone'&&!ENG[e].sus)e={ep:'pad',pluck:'bowed',koto:'bowed',kalimba:'choirU',marimba:'choirU',glass:'pad',bell:'choirA',steel:'pad'}[e];
   if(b.role==='small'&&ENG[e].sus)e={bowed:'pluck',pad:'bell',choirU:'glass',choirA:'bell',flute:'glass',pixel:'kalimba',sub:'marimba'}[e];
   return e}
-function setRole(b,role){b.role=role;b.eng=pickEngine(b);const hi=Math.floor(b.h/60)%6;
+function setRole(b,role){b.role=role;assignInst(b);const hi=Math.floor(b.h/60)%6;
   if(role==='drone'){b.plen=32;b.pat=euclid(1,32)}
   else if(role==='big'){b.plen=[8,12,16][hi%3];b.pat=euclid(2+Math.round(b.tex),b.plen)}
   else if(role==='medium'){b.plen=[6,8,12,5,10,7][hi];b.pat=euclid(Math.min(b.plen-1,2+Math.round(b.tex*3)),b.plen)}
@@ -251,11 +303,12 @@ function setRole(b,role){b.role=role;b.eng=pickEngine(b);const hi=Math.floor(b.h
   b.rot=b.id%b.plen}
 
 const bpm=()=>$('tmode').value==='auto'?autoBpm:+$('bpm').value;
-function curMood(){const m=$('mood').value;return m!=='auto'?m:avgL<.3?'night':avgL>.62?'sunny':'dreamy'}
+function curMood(){const m=$('mood').value;return m!=='auto'?m:PAL[pal].mood||(avgL<.3?'night':avgL>.62?'sunny':'dreamy')}
 function updateRead(){mood=curMood();if(!timer)root=pendingRoot;
   $('rKey').textContent=NOTES[root]+(mood==='night'?' minor':'');$('rMood').textContent=mood[0].toUpperCase()+mood.slice(1);
-  $('rBpm').textContent=Math.round(bpm());$('rVox').textContent=blobs.length;if(!timer)$('rChord').textContent=MODES[mood].names[0]}
-$('mood').addEventListener('change',updateRead);$('vox').addEventListener('change',()=>{if(!live)analyze()});
+  $('rBpm').textContent=Math.round(bpm());$('rPal').textContent=PAL[pal].n;if(!timer)$('rChord').textContent=MODES[mood].names[0]}
+$('mood').addEventListener('change',updateRead);
+$('pal').addEventListener('change',async()=>{const k=$('pal').value;if(k==='auto'){maybeSwitch();return}await ensureAudio();await loadPal(k);if($('pal').value===k)setPal(k)});$('vox').addEventListener('change',()=>{if(!live)analyze()});
 $('tmode').addEventListener('change',()=>{$('bpm').disabled=$('tmode').value==='auto';if($('tmode').value==='manual')$('bpm').value=Math.round(autoBpm);updateRead()});
 $('bpm').addEventListener('input',updateRead);
 
@@ -282,7 +335,8 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 async function startCam(){
   try{if(stream)stream.getTracks().forEach(t=>t.stop());
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:960}},audio:false});
-    video.srcObject=stream;await video.play();$('start').hidden=true;initZoom();setLive(true);
+    try{await stream.getVideoTracks()[0].applyConstraints({advanced:[{exposureMode:'continuous'},{whiteBalanceMode:'continuous'},{focusMode:'continuous'}]})}catch(e){}
+    video.srcObject=stream;await video.play();emaHi=null;$('start').hidden=true;initZoom();setLive(true);
   }catch(e){status('Camera blocked: check permissions');$('start').hidden=false}}
 function setLive(on){live=on;prevLum=null;$('mLive').setAttribute('aria-pressed',on);$('mSnap').setAttribute('aria-pressed',!on);
   $('shutter').classList.toggle('frozen',!on);$('shutter').querySelector('span').textContent=on?'SNAP':'LIVE';status(on?'Live':'Snapshot');analyze()}
@@ -314,8 +368,9 @@ async function ensureAudio(){
     bus.connect(dly);dly.connect(fb);fb.connect(dly);dly.connect(dw);dw.connect(master);
     revSend=ac.createGain();const cv=ac.createConvolver();cv.buffer=ir(4.5);revWet=ac.createGain();
     revSend.connect(cv);cv.connect(revWet);revWet.connect(master);setDream();
+    texBus=G(master,.9);texBus.connect(revSend);drumBus=G(master,.85);const ds=G(revSend,.15);drumBus.connect(ds);
     noise=ac.createBuffer(1,ac.sampleRate*2,ac.sampleRate);const nd=noise.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1}
-  try{await ac.resume()}catch(e){}}
+  try{await ac.resume()}catch(e){}loadPal(wantPal())}
 function setDream(){if(revWet)revWet.gain.value=+$('dream').value/100*1.4}
 $('dream').addEventListener('input',setDream);
 const mtof=m=>440*2**((m-69)/12),spt=()=>60/bpm()/4;
@@ -363,6 +418,108 @@ const ENGINES={
   steel(b,f,t,a,l,v,out){const g=G(out,1);modal(f,t,v,g,[1,2,2.98,4.16],[1,.5,.35,.25],[1.1,.6,.4,.25],1)}
 };
 
+/* ---------- sample library (FluidR3 GM, loaded on demand) ---------- */
+const SF='https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/',NF=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'],SN=[36,42,48,54,60,66,72,78,84];
+const inst={};
+const decode=ab=>new Promise((res,rej)=>ac.decodeAudioData(ab,res,rej));
+function loadInst(name,notes=SN){if(inst[name])return inst[name].p;const rec={buf:new Map(),ready:false};inst[name]=rec;
+  rec.p=Promise.all(notes.map(m=>fetch(`${SF}${name}-mp3/${NF[m%12]}${Math.floor(m/12)-1}.mp3`).then(r=>r.ok?r.arrayBuffer():Promise.reject()).then(decode)
+    .then(b=>{rec.buf.set(m,b);rec.ready=true}).catch(()=>{}))).then(()=>rec);return rec.p}
+function nearestBuf(name,midi){const rec=inst[name];if(!rec||!rec.ready)return null;let m=null,bd=99;for(const k of rec.buf.keys()){const d=Math.abs(k-midi);if(d<bd){bd=d;m=k}}
+  return{buf:rec.buf.get(m),rate:2**((midi-m)/12)}}
+function sampleVoice(name,midi,t,len,vel,out,att=.005){const src=nearestBuf(name,midi);if(!src)return false;
+  const s=ac.createBufferSource();s.buffer=src.buf;s.playbackRate.value=src.rate;const g=G(out,0);s.connect(g);
+  const dur=Math.max(.15,Math.min(len+.8,src.buf.duration/src.rate));
+  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(.0002,vel),t+att);g.gain.setValueAtTime(Math.max(.0002,vel),t+Math.max(att,dur-.45));g.gain.exponentialRampToValueAtTime(.0001,t+Math.max(att+.05,dur));
+  s.start(t);s.stop(t+dur+.05);return true}
+
+/* ---------- granular synthesis: clouds of tiny slices of a sound ---------- */
+function grains(src,t,dur,out,o){
+  const size=o.size||.12,dens=o.dens||16,pos=o.pos??.3,spray=o.spray??.2,vel=o.vel||.1,att=Math.min(o.att||.3,dur*.4),jit=o.jit||.006,pan=o.pan||0,ps=o.panSpread??.7;
+  const B=src.buf,bd=B.duration,g=G(out,0);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vel,t+att);g.gain.setValueAtTime(vel,t+Math.max(att,dur*.65));g.gain.linearRampToValueAtTime(0,t+dur);
+  const n=Math.min(170,Math.floor(dur*dens));
+  for(let i=0;i<n;i++){const gt=t+i/dens+Math.random()/dens*.6,r=src.rate*(1+(Math.random()-.5)*jit*2),sz=size*(.7+Math.random()*.6);
+    if(bd<sz*r+.02)continue;const off=Math.max(0,Math.min(bd-sz*r-.01,(pos+(Math.random()-.5)*spray)*bd));
+    const s=ac.createBufferSource(),w=ac.createGain();s.buffer=B;s.playbackRate.value=r;
+    w.gain.setValueAtTime(0,gt);w.gain.linearRampToValueAtTime(1,gt+sz/2);w.gain.linearRampToValueAtTime(0,gt+sz);
+    if(ac.createStereoPanner){const p=ac.createStereoPanner();p.pan.value=Math.max(-1,Math.min(1,pan+(Math.random()-.5)*ps));w.connect(p);p.connect(g)}else w.connect(g);
+    s.connect(w);s.start(gt,off,sz*r+.005)}}
+function pixBuf(b){if(b.pix)return b.pix;const sr=ac.sampleRate,n=sr,buf=ac.createBuffer(1,n,sr),d=buf.getChannelData(0),L=b.lums,P=sr/220,mean=L.reduce((a,c)=>a+c,0)/L.length;let mx=1e-6;
+  for(let i=0;i<n;i++){const ph=(i%P)/P;d[i]=(L[Math.floor(ph*L.length)]-mean)+Math.sin(2*Math.PI*ph)*.25+(Math.random()-.5)*b.tex*.06;mx=Math.max(mx,Math.abs(d[i]))}
+  for(let i=0;i<n;i++)d[i]/=mx;b.pix=buf;return buf}
+
+/* ---------- palettes: the vibe picks a band ---------- */
+const PAL={
+  lofi:{n:'Lo-fi night',mood:'night',bpm:[66,86],drums:'lofi',hues:['electric_piano_1','vibraphone','acoustic_guitar_nylon','electric_guitar_jazz','voice_oohs','pad_2_warm'],grey:'acoustic_grand_piano',bass:'fretless_bass',drone:'electric_piano_1',tex:[['fx_1_rain',.4],['crackle',.5]]},
+  forest:{n:'Forest folk',mood:'sunny',bpm:[72,100],drums:'light',hues:['cello','acoustic_guitar_nylon','flute','kalimba','orchestral_harp','pan_flute'],grey:'recorder',bass:'acoustic_bass',drone:'string_ensemble_1',tex:[['bird_tweet',.28],['breath_noise',.2]]},
+  neon:{n:'Neon city',mood:'night',bpm:[112,132],drums:'four',hues:['lead_2_sawtooth','synth_brass_1','fx_3_crystal','lead_1_square','pad_3_polysynth','synth_strings_1'],grey:'electric_piano_2',bass:'synth_bass_1',drone:'pad_8_sweep',tex:[['fx_7_echoes',.25]]},
+  under:{n:'Underwater',mood:'dreamy',bpm:[56,70],drums:'none',hues:['fx_4_atmosphere','music_box','celesta','vibraphone','pad_7_halo','choir_aahs'],grey:'pad_1_new_age',bass:'fretless_bass',drone:'pad_7_halo',tex:[['seashore',.5]]},
+  cine:{n:'Cinematic',mood:'night',bpm:[60,84],drums:'taiko',hues:['french_horn','acoustic_grand_piano','tubular_bells','cello','string_ensemble_1','choir_aahs'],grey:'contrabass',bass:'contrabass',drone:'choir_aahs',tex:[['fx_2_soundtrack',.3]]},
+  play:{n:'Sunny play',mood:'sunny',bpm:[100,124],drums:'light',hues:['steel_drums','marimba','xylophone','pizzicato_strings','glockenspiel','acoustic_guitar_steel'],grey:'woodblock',bass:'acoustic_bass',drone:'accordion',tex:[]},
+  lounge:{n:'Jazz lounge',mood:'dreamy',bpm:[78,104],drums:'brush',hues:['muted_trumpet','alto_sax','electric_guitar_jazz','vibraphone','electric_piano_1','tenor_sax'],grey:'acoustic_grand_piano',bass:'acoustic_bass',drone:'pad_2_warm',tex:[['crackle',.35]]},
+  bazaar:{n:'Dream bazaar',mood:'night',bpm:[76,100],drums:'taiko',hues:['sitar','shamisen','shakuhachi','kalimba','koto','dulcimer'],grey:'ocarina',bass:'acoustic_bass',drone:'pad_5_bowed',tex:[['fx_4_atmosphere',.3]]},
+  abstract:{n:'Abstract synths',synth:1,bpm:[60,130],drums:'none',tex:[['pixel',.35]]}};
+const TEXNAT=new Set(['fx_1_rain','seashore','bird_tweet','breath_noise']);
+let pal='abstract',energy=.3,vibe={};const votes={};
+function palInst(k){const P=PAL[k];if(P.synth)return[];return[...new Set([...P.hues,P.grey,P.bass,P.drone,...(P.drums==='taiko'?['taiko_drum']:[])])]}
+function loadPal(k){const P=PAL[k];if(P.synth||P.ready)return Promise.resolve();if(P.p)return P.p;if(!ac)return Promise.resolve();
+  status('Loading '+P.n+'…');
+  P.p=Promise.all([...palInst(k).map(n=>loadInst(n)),...P.tex.filter(([n])=>n!=='crackle'&&n!=='pixel').map(([n])=>loadInst(n,[60]))])
+    .then(()=>{P.ready=true;status(live?'Live':'Snapshot');if(!timer)maybeSwitch()});return P.p}
+function vibePick(){const v=vibe;if(!v.light&&v.light!==0)return'abstract';
+  if(v.light<.22)return v.neon>.05?'neon':'lofi';
+  if(v.div>=5&&v.light>.38&&v.sat>.3)return'play';
+  if(v.blue>.4&&v.green<v.blue*.4&&v.texE<.45)return'under';if(v.green>.28)return'forest';if(v.warm>.35&&v.light<.5)return'lounge';
+  if(v.sat<.16)return v.contrast>.55?'cine':'abstract';if(v.warm>.25&&v.sat>.28)return'bazaar';return'abstract'}
+function wantPal(){const m=$('pal').value;if(m!=='auto')return m;let best=pal,bv=0;for(const k in votes)if(votes[k]>bv){bv=votes[k];best=k}return best}
+function maybeSwitch(){const w=wantPal();if(w===pal)return;const P=PAL[w];if(P.synth||P.ready)setPal(w);else loadPal(w)}
+function setPal(k){pal=k;setTimeout(spreadInst);if(!live){const[a,b]=PAL[k].bpm;autoBpm=a+(b-a)*Math.min(1,energy*1.4)}for(const b of blobs)assignInst(b);renderKey();updateRead()}
+function prettyInst(n){return(n.startsWith('pad_')?n.slice(6)+' pad':n.startsWith('lead_')?n.slice(7)+' lead':n.startsWith('fx_')?n.slice(5):n.replace(/_\d+$/,'')).replace(/_/g,' ').replace(/^./,c=>c.toUpperCase())}
+function assignInst(b){const P=PAL[pal];b.eng=pickEngine(b);b.gran=false;b.inst=null;if(P.synth)return;
+  if(b.role==='drone'){b.inst=P.drone;b.gran=true;return}
+  b.gran=b.tex>.6&&b.role!=='small';const grp=Math.floor(((b.h+30)%360)/60)%6;
+  const shade=b.l<.33?0:b.l<.6?1:2;b.inst=b.s<.15?P.grey:(b.role==='big'&&b.cy>.55?P.bass:P.hues[(grp+[0,2,4][shade])%6])}
+// no two objects share an instrument: later (smaller) ones step to the next free one in the palette
+function spreadInst(){const P=PAL[pal];if(P.synth)return;const used=new Set();
+  for(const b of [...blobs].sort((a,c)=>c.area-a.area)){if(b.role==='drone'||!b.inst){continue}
+    if(used.has(b.inst)){const opts=[...P.hues,P.grey];const start=Math.max(0,opts.indexOf(b.inst));for(let k=1;k<=opts.length;k++){const c=opts[(start+k)%opts.length];if(!used.has(c)){b.inst=c;break}}}
+    used.add(b.inst)}}
+const HUE6=['Red','Yellow','Green','Cyan','Blue','Magenta'];
+function renderKey(){const P=PAL[pal];$('palName').textContent=P.n;
+  if(P.synth){$('key').innerHTML=HUE_ENG.map((e,i)=>`<li><span class="sw" style="background:hsl(${i*30} 75% 55%)"></span><span><b>${HUE_NAME[i]}</b><br>${ENG[e].n}</span></li>`).join('')+
+    [['White','flute','hsl(0 0% 92%)'],['Grey','pixel','hsl(0 0% 55%)'],['Black','sub','hsl(0 0% 14%)']].map(([n,e,c])=>`<li><span class="sw" style="background:${c};box-shadow:0 0 0 1px #fff4"></span><span><b>${n}</b><br>${ENG[e].n}</span></li>`).join('');return}
+  $('key').innerHTML=P.hues.map((e,i)=>`<li><span class="sw" style="background:hsl(${i*60} 75% 55%)"></span><span><b>${HUE6[i]}</b><br>${prettyInst(e)}</span></li>`).join('')+
+    `<li><span class="sw" style="background:hsl(0 0% 60%);box-shadow:0 0 0 1px #fff4"></span><span><b>White, grey, black</b><br>${prettyInst(P.grey)}</span></li>`+
+    `<li><span class="sw" style="background:linear-gradient(#0000,#fff6)"></span><span><b>Big and low in frame</b><br>${prettyInst(P.bass)}</span></li>`+
+    `<li><span class="sw" style="background:conic-gradient(#f66,#ff6,#6f6,#6ff,#66f,#f6f,#f66)"></span><span><b>Biggest thing (drone)</b><br>Granular ${prettyInst(P.drone).toLowerCase()}</span></li>`+
+    (P.tex.length?`<li><span class="sw" style="background:#7a8aa0"></span><span><b>Atmosphere</b><br>${P.tex.map(([n])=>n==='crackle'?'Vinyl crackle':n==='pixel'?'Pixel grains':prettyInst(n.replace('fx_1_rain','rain'))).join(', ')}</span></li>`:'')}
+
+/* ---------- atmosphere layer ---------- */
+let texBus,drumBus;
+function crackle(t,dur,v){const n=Math.floor(dur*(20+energy*30));
+  for(let i=0;i<n;i++){const ct=t+Math.random()*dur,s=ac.createBufferSource(),g=G(texBus,0),f=F('highpass',1500+Math.random()*5000,.7,g);s.buffer=noise;s.connect(f);
+    const a=v*(.04+Math.random()**3*.5);g.gain.setValueAtTime(a,ct);g.gain.exponentialRampToValueAtTime(.0001,ct+.004+Math.random()*.012);s.start(ct,Math.random()*1.5,.03)}
+  const h=G(texBus,0);h.gain.setValueAtTime(v*.02,t);noiseSrc(t,t+dur+.05,F('bandpass',4500,.5,h))}
+function atmosphere(n,t){if(n%16)return;const P=PAL[pal],bar=spt()*16,amt=+$('atmo').value/100;if(amt<=0)return;
+  for(const[name,v]of P.tex){
+    if(name==='crackle'){crackle(t,bar,v*amt);continue}
+    if(name==='pixel'){const d=blobs[0];if(d)grains({buf:pixBuf(d),rate:mtof(48+root)/220},t,bar*1.15,texBus,{size:.2,dens:9,pos:Math.random(),spray:1,vel:v*amt*.5,att:bar*.3});continue}
+    const src=nearestBuf(name,60);if(!src)continue;const nat=TEXNAT.has(name);
+    grains({buf:src.buf,rate:nat?.9+Math.random()*.2:2**((((root+6)%12)-6)/12)},t,bar*1.2,texBus,
+      {size:nat?.3:.25,dens:nat?14:10,pos:(n/16%8)/8,spray:.7,vel:v*amt*(nat?1.3:.9)*(.6+.6*energy),att:bar*.3,jit:nat?.05:.004,panSpread:1.6})}}
+
+/* ---------- drums that follow the scene's energy ---------- */
+function kick(t,v){const o=ac.createOscillator(),g=ac.createGain();o.frequency.setValueAtTime(140,t);o.frequency.exponentialRampToValueAtTime(42,t+.14);o.connect(g);g.connect(drumBus);env(g,t,.002,.32,v);o.start(t);o.stop(t+.4)}
+function nhit(t,v,type,f,q,dec){const s=ac.createBufferSource(),g=G(drumBus,0),fl=F(type,f,q,g);s.buffer=noise;s.connect(fl);env(g,t,.002,dec,v);s.start(t,Math.random(),dec+.05)}
+function tom(t,v,f){const o=ac.createOscillator(),g=ac.createGain();o.frequency.setValueAtTime(f*1.6,t);o.frequency.exponentialRampToValueAtTime(f,t+.08);o.connect(g);g.connect(drumBus);env(g,t,.003,.6,v);o.start(t);o.stop(t+.7)}
+function rim(t,v){const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=1700;o.connect(g);g.connect(drumBus);env(g,t,.001,.03,v);o.start(t);o.stop(t+.05)}
+function drums(n,t){const st=PAL[pal].drums,e=energy,i=n%16,sw=(i%2)?spt()*.28:0;if(st==='none'||e<.08)return;const v=.25+.75*Math.min(1,e*1.4);
+  if(st==='lofi'){if(i===0||(i===10&&e>.3))kick(t,.7*v);if((i===4||i===12)&&e>.2)nhit(t+.015,.35*v,'bandpass',1800,.8,.18);if((i%2===0&&e>.15)||e>.6)nhit(t+sw,.12*v,'highpass',7000,1,.04)}
+  else if(st==='four'){if(i%4===0)kick(t,.85*v);if(i%4===2)nhit(t,.18*v,'highpass',8000,1,.06);if((i===4||i===12)&&e>.3)nhit(t,.4*v,'bandpass',1200,1.2,.12);if(e>.55&&i%2===1)nhit(t,.08*v,'highpass',9000,1,.03)}
+  else if(st==='light'){if(e>.3||i%2===0)nhit(t+sw*.5,(i%4===0?.14:.07)*v,'highpass',6000,1,.05);if(i===4||i===12)rim(t,.25*v);if(i===0&&e>.4)kick(t,.4*v)}
+  else if(st==='brush'){if(i===4||i===12)nhit(t,.22*v,'bandpass',3000,.5,.25);if([0,6,8,14].includes(i))nhit(t+sw,.08*v,'highpass',9000,2,.35);if(i===0||(i===10&&e>.4))kick(t,.35*v)}
+  else if(st==='taiko'){const hit=i===0||i===8||(i===6&&e>.35)||(i===11&&e>.55)||(i===14&&e>.7);if(hit&&!sampleVoice('taiko_drum',41,t,1,.6*v,drumBus))tom(t,.6*v,70);if(e>.6&&i%4===2)rim(t,.12*v)}}
+
 function degSemi(sc,d){return sc[((d%7)+7)%7]+12*Math.floor(d/7)}
 function snap(d,cr){let best=d,bd=99;for(const o of[-7,0,7])for(const c of[0,2,4]){const t=cr+c+o;if(Math.abs(t-d)<bd){bd=Math.abs(t-d);best=t}}return best}
 function playBlob(b,t,n){
@@ -370,19 +527,29 @@ function playBlob(b,t,n){
   let deg=Math.round((1-b.cy)*6)+b.mel[b.step++%b.mel.length];
   if(b.role==='drone')deg=cr;else if(b.role==='big'||n%4===0)deg=snap(deg,cr);
   deg=Math.max(-3,Math.min(10,deg));
-  const midi=Math.max(28,Math.min(100,BASE[b.role]+root+degSemi(M.scale,deg)+(E.oct||0))),f=mtof(midi);
+  const P=PAL[pal],useS=!P.synth&&b.inst;
+  if(b.role!=='drone'&&Math.random()>.4+.6*Math.min(1,energy*1.6+.25)){b.step--;return}
+  const base=useS&&b.inst===P.bass?36:BASE[b.role];
+  const midi=Math.max(28,Math.min(100,base+root+degSemi(M.scale,deg)+(useS?0:(E.oct||0)))),f=mtof(midi);
   const beat=spt(),len={drone:beat*30,big:beat*6,medium:beat*2.5,small:beat*.9}[b.role];
   const att=b.role==='drone'?beat*8:.004+Math.pow(b.round,2)*.45;
   const vel={drone:.11,big:.1,medium:.085,small:.065}[b.role]*(.6+b.s*.6+Math.sqrt(b.area)*.6)*E.g;
   const out=ac.createGain(),pan=ac.createStereoPanner?ac.createStereoPanner():null;
   if(pan){pan.pan.value=(b.cx-.5)*1.6;out.connect(pan);pan.connect(bus);pan.connect(revSend)}else{out.connect(bus);out.connect(revSend)}
-  const k=b.eng.startsWith('choir')?'choir':b.eng;
-  ENGINES[k](b,f,t,att,len,vel,out,b.eng==='choirU'?3+b.vowel%2:b.vowel%3);
+  let played=false;
+  if(useS){if(b.gran){const src=nearestBuf(b.inst,midi);if(src){const dr=b.role==='drone';
+      grains(src,t,att+len,out,{size:dr?.22:.08+(1-b.tex)*.08,dens:dr?14:22,pos:.12+b.cx*.5,spray:.25+b.tex*.4,vel:vel*(dr?2.4:1.6),att:Math.max(.05,att),jit:.004+b.motion*.02,pan:(b.cx-.5)*1.4});played=true}}
+    else played=sampleVoice(b.inst,midi,t,len,vel*1.9,out,Math.max(.004,att*.5))}
+  if(!played){const k=b.eng.startsWith('choir')?'choir':b.eng;ENGINES[k](b,f,t,att,len,vel,out,b.eng==='choirU'?3+b.vowel%2:b.vowel%3);
+    if(P.synth&&b.role==='drone')grains({buf:pixBuf(b),rate:f/220},t,att+len,out,{size:.15,dens:12,pos:.5,spray:1,vel:vel*.9,att})}
   if(b.tex>.35&&!['flute'].includes(b.eng)){const gn=G(out,0);env(gn,t,att*.5+.004,Math.min(len,.8),vel*(b.tex-.3)*.9);noiseSrc(t,t+att+Math.min(len,.8)+.1,F('bandpass',Math.min(12000,f*3),5,gn))}
   queue.push({t,id:b.id,note:NOTES[midi%12]+(Math.floor(midi/12)-1)})}
+function tagName(b){const P=PAL[pal];return!P.synth&&b.inst&&inst[b.inst]&&inst[b.inst].ready?(b.gran?'Granular ':'')+prettyInst(b.inst).toLowerCase().replace(/^./,c=>c.toUpperCase()):ENG[b.eng].n}
 
 function step16(n,t){
-  if(n%128===0)root=pendingRoot;if(n%32===0)queue.push({t,chord:MODES[mood].names[Math.floor(n/32)%4]});
+  if(n%128===0){root=pendingRoot;const w=wantPal();for(const k in votes)votes[k]=k===w?1:0}if(n%32===0)maybeSwitch();
+  atmosphere(n,t);drums(n,t);
+  if(n%32===0)queue.push({t,chord:MODES[mood].names[Math.floor(n/32)%4]});
   dly.delayTime.setTargetAtTime(spt()*3,t,.5);
   for(const b of blobs)if(b.pat[(n+b.rot)%b.plen])playBlob(b,t,n)}
 function sched(){while(nextT<ac.currentTime+.15){step16(tick,nextT);nextT+=spt();tick++}$('rBpm').textContent=Math.round(bpm())}
@@ -410,26 +577,33 @@ $('rec').addEventListener('click',async()=>{
 
 /* ---------- drawing: outlines and floating notes ---------- */
 const tint=b=>b.s<.15?(b.l<.25?[150,140,175]:[236,232,242]):hsl2rgb(b.h,Math.max(b.s,.6),Math.min(.66,Math.max(.52,b.l)));
-function fillCanvas(b,rgb){const c=document.createElement('canvas');c.width=b.SW;c.height=b.SH;const x=c.getContext('2d'),id=x.createImageData(b.SW,b.SH);
-  for(let i=0;i<b.mask.length;i++)if(b.mask[i]){id.data[i*4]=rgb[0];id.data[i*4+1]=rgb[1];id.data[i*4+2]=rgb[2];id.data[i*4+3]=255}x.putImageData(id,0,0);return c}
 function frame(now){
   const dpr=devicePixelRatio||1,W=Math.round(vf.clientWidth*dpr),H=Math.round(vf.clientHeight*dpr);
   if(vf.width!==W||vf.height!==H){vf.width=W;vf.height=H}
-  vx.fillStyle='#000';vx.fillRect(0,0,W,H);const s=source();if(s)drawCover(vx,s,W,H,mirrored());
-  vx.fillStyle='#0b061a66';vx.fillRect(0,0,W,H);
+  vx.fillStyle='#000';vx.fillRect(0,0,W,H);const s=source();
+  if(s){const gain=Math.max(1,Math.min(2.4,.42/Math.max(.05,lightLevel)));if(gain>1.05&&'filter'in vx)vx.filter=`brightness(${gain.toFixed(2)}) saturate(1.15)`;drawCover(vx,s,W,H,mirrored());vx.filter='none'}
+  vx.fillStyle=lowLight?'#0b061a2a':'#0b061a55';vx.fillRect(0,0,W,H);
   if(ac)while(queue.length&&queue[0].t<=ac.currentTime){const q=queue.shift();
     if(q.chord){$('rChord').textContent=q.chord;continue}const b=blobs.find(x=>x.id===q.id);if(b){b.pulse=1;b.note=q.note}}
   const T=now/1000;vx.imageSmoothingEnabled=true;vx.lineCap='round';vx.lineJoin='round';
   for(const b of blobs){if(!b.segs)continue;const rgb=tint(b),col=`rgb(${rgb})`;
     vx.strokeStyle=col;vx.lineWidth=(1.3+b.pulse*1.4)*dpr;vx.shadowColor=col;vx.shadowBlur=(2+b.pulse*10)*dpr;
     vx.beginPath();const sg=b.segs;for(let i=0;i<sg.length;i+=4){vx.moveTo(sg[i]*W,sg[i+1]*H);vx.lineTo(sg[i+2]*W,sg[i+3]*H)}vx.stroke();vx.shadowBlur=0}
-  for(const b of blobs){b.dx+=(b.cx-b.dx)*.2;b.dy+=(b.cy-b.dy)*.2;const rgb=tint(b),col=`rgb(${rgb})`,x=b.dx*W,y=b.dy*H;
-    const side=b.dx>.7?-1:1,tx=Math.max(26*dpr,Math.min(W-26*dpr,x+side*(18+Math.sin(T*.9+b.id)*6)*dpr)),ty=Math.max(22*dpr,Math.min(H-36*dpr,y-(24+Math.cos(T*.7+b.id*1.7)*5)*dpr));
+  // place floating tags, then nudge apart any that overlap
+  for(const b of blobs){b.dx+=(b.cx-b.dx)*.2;b.dy+=(b.cy-b.dy)*.2;const side=b.dx>.7?-1:1;
+    b.gx=b.dx*W+side*(18+Math.sin(T*.9+b.id)*6)*dpr;b.gy=b.dy*H-(24+Math.cos(T*.7+b.id*1.7)*5)*dpr}
+  for(let it=0;it<6;it++)for(let i=0;i<blobs.length;i++)for(let j=i+1;j<blobs.length;j++){const a=blobs[i],c=blobs[j];
+    let ddx=c.gx-a.gx,ddy=c.gy-a.gy;const mw=110*dpr,mh=40*dpr;if(Math.abs(ddx)<mw&&Math.abs(ddy)<mh){
+      if(Math.abs(ddy)<1)ddy=(c.id>a.id?1:-1);const push=(mh-Math.abs(ddy))/2*Math.sign(ddy);a.gy-=push;c.gy+=push}}
+  for(const b of blobs){b.gx=Math.max(26*dpr,Math.min(W-26*dpr,b.gx));b.gy=Math.max(22*dpr,Math.min(H-36*dpr,b.gy));
+    b.tx=b.tx==null?b.gx:b.tx+(b.gx-b.tx)*.25;b.ty=b.ty==null?b.gy:b.ty+(b.gy-b.ty)*.25}
+  for(const b of blobs){const rgb=tint(b),col=`rgb(${rgb})`,x=b.dx*W,y=b.dy*H;
+    const tx=b.tx,ty=b.ty;
     vx.strokeStyle='#ffffffaa';vx.lineWidth=1*dpr;vx.beginPath();vx.moveTo(x,y);vx.lineTo(tx,ty);vx.stroke();
     const r=(10+b.pulse*6)*dpr;vx.shadowColor=col;vx.shadowBlur=(6+b.pulse*14)*dpr;vx.fillStyle=col;vx.beginPath();vx.arc(tx,ty,r,0,7);vx.fill();vx.shadowBlur=0;
     vx.strokeStyle='#fff';vx.lineWidth=1.3*dpr;vx.stroke();
     vx.fillStyle=b.s<.15&&b.l>=.25?'#222':'#fff';vx.textAlign='center';vx.textBaseline='middle';vx.font=`${Math.round(r*1.1)}px system-ui,sans-serif`;vx.fillText('♪',tx,ty+dpr);
-    const label=ENG[b.eng].n+(b.note?' · '+b.note:'');vx.font=`600 ${11*dpr}px Archivo,sans-serif`;const tw=vx.measureText(label).width+10*dpr,ly=ty+r+10*dpr;
+    const label=tagName(b)+(b.note?' · '+b.note:'');vx.font=`600 ${11*dpr}px Archivo,sans-serif`;const tw=vx.measureText(label).width+10*dpr,ly=ty+r+10*dpr;
     const lx=Math.max(tw/2+4*dpr,Math.min(W-tw/2-4*dpr,tx));
     vx.fillStyle='#0009';vx.beginPath();vx.roundRect?vx.roundRect(lx-tw/2,ly-8*dpr,tw,16*dpr,8*dpr):vx.rect(lx-tw/2,ly-8*dpr,tw,16*dpr);vx.fill();
     vx.fillStyle='#fff';vx.fillText(label,lx,ly+.5*dpr);b.pulse*=.92}
@@ -437,7 +611,7 @@ function frame(now){
     vx.fillStyle='#fff';vx.shadowColor='#000';vx.shadowBlur=6*dpr;vx.fillText(zt,W-14*dpr,24*dpr);vx.shadowBlur=0}
   if(!live){vx.fillStyle='#ff6b62';vx.textAlign='left';vx.font=`600 ${13*dpr}px Archivo,sans-serif`;vx.fillText('FROZEN',14*dpr,H-16*dpr)}
   requestAnimationFrame(frame)}
-requestAnimationFrame(frame);
+renderKey();requestAnimationFrame(frame);
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&timer)stopPlay()});
 }
 </script>
